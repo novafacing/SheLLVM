@@ -1,4 +1,4 @@
-find_package(LLVM 13...15 REQUIRED)
+find_package(LLVM 15 REQUIRED)
 
 add_library(shellvm MODULE
   PreparePass.cpp
