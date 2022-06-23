@@ -1,13 +1,13 @@
-#include "llvm/ADT/MapVector.h"
-#include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/SmallSet.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/GlobalOpt.h"
+#include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/SetVector.h>
+#include <llvm/ADT/SmallSet.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Pass.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/IPO/GlobalOpt.h>
 
 using namespace std;
 using namespace llvm;
@@ -133,7 +133,8 @@ struct GlobalToStack : public ModulePass {
       } else if (isa<ConstantExpr>(C2) ||
                  (isa<GlobalVariable>(C2) &&
                   Vars.count(cast<GlobalVariable>(C2)))) {
-        GetElementPtrInst *GEP = GetElementPtrInst::CreateInBounds(Ptr, Idx);
+        GetElementPtrInst *GEP =
+            GetElementPtrInst::CreateInBounds(Ptr->getType(), Ptr, Idx);
         GEP->insertAfter(After);
 
         ToUndefine.insert(C2);
@@ -175,7 +176,7 @@ struct GlobalToStack : public ModulePass {
 #if LLVM_VERSION_MAJOR >= 5
                          G->getType()->getAddressSpace(),
 #endif
-                         nullptr, 
+                         nullptr,
 #if LLVM_VERSION_MAJOR >= 11
                          G->getAlign().valueOrOne(),
 #elif LLVM_VERSION_MAJOR == 10
@@ -183,8 +184,7 @@ struct GlobalToStack : public ModulePass {
 #else
                          G->getAlignment(),
 #endif
-                         "",
-                         firstStore ? firstStore : insertionPoint);
+                         "", firstStore ? firstStore : insertionPoint);
 
       inst->takeName(G);
 
