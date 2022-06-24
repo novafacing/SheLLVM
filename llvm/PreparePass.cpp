@@ -4,8 +4,48 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/Internalize.h"
+// #include <llvm/llvm/IR/Constants.h>
+// #include <llvm/llvm/Support/Error.h>
+
+#include <iostream>
 
 using namespace llvm;
+
+class DebugStream {
+private:
+  bool enabled;
+
+public:
+  DebugStream(bool enabled) : enabled(enabled) {}
+  template <typename T>
+  friend DebugStream &operator<<(DebugStream &stream, T thing) {
+    if (stream.enabled) {
+      std::cout << thing << std::flush;
+    }
+    return stream;
+  }
+  friend DebugStream &operator<<(DebugStream &stream,
+                                 std::ostream &(*pf)(std::ostream &)) {
+    if (stream.enabled) {
+      std::cout << pf << std::flush;
+    }
+    return stream;
+  }
+  friend DebugStream &operator<<(DebugStream &stream,
+                                 std::basic_ios<char> &(*pf)(std::ostream &)) {
+    if (stream.enabled) {
+      std::cout << pf << std::flush;
+    }
+    return stream;
+  }
+  friend DebugStream &operator<<(DebugStream &stream,
+                                 std::ios_base &(*pf)(std::ostream &)) {
+    if (stream.enabled) {
+      std::cout << pf << std::flush;
+    }
+    return stream;
+  }
+};
 
 namespace {
 
@@ -17,6 +57,8 @@ struct PreparePass : public ModulePass {
   static char ID;
   PreparePass() : ModulePass(ID) {}
 
+  std::set<Function *> annotFuncs;
+
   bool mustPreserve(const GlobalValue &value) {
     if (!isa<Function>(value))
       return false;
@@ -25,45 +67,49 @@ struct PreparePass : public ModulePass {
     return (!fn.isDeclaration() && fn.hasFnAttribute("shellvm-main"));
   }
 
-  bool runOnModule(Module &M) override {
-    auto GlobalMains = M.getNamedGlobal("llvm.global.annotations");
-    if (!GlobalMains) {
-      report_fatal_error("No functions have been annotated with shellvm-main");
-    }
+  bool doInitialization(Module &M) override {
+    // Initialize the module with the list of annotated functions
+    getAnnotatedFunctions(&M);
+    return false;
+  }
 
-    bool FoundAnnotation = false;
-    ConstantArray *A = cast<ConstantArray>(GlobalMains->getOperand(0));
-    for (int I = 0, E = A->getNumOperands(); I < E; ++I) {
-      auto D = cast<ConstantStruct>(A->getOperand(I));
+  void getAnnotatedFunctions(Module *M) {
+    for (Module::global_iterator I = M->global_begin(), E = M->global_end();
+         I != E; ++I) {
 
-      if (auto Fn = dyn_cast<Function>(D->getOperand(0)->getOperand(0))) {
-        auto Annotation =
-            cast<ConstantDataArray>(
-                cast<GlobalVariable>(D->getOperand(1)->getOperand(0))
-                    ->getOperand(0))
-                ->getAsCString();
-
-        if (Annotation == "shellvm-main") {
-          if (FoundAnnotation) {
-            report_fatal_error("More than one function has been annotated "
-                               "with shellvm-main");
+      if (I->getName() == "llvm.global.annotations") {
+        ConstantArray *CA = dyn_cast<ConstantArray>(I->getOperand(0));
+        for (auto OI = CA->op_begin(); OI != CA->op_end(); ++OI) {
+          ConstantStruct *CS = dyn_cast<ConstantStruct>(OI->get());
+          CS->dump();
+          Function *func = dyn_cast<Function>(CS->getOperand(0));
+          func->dump();
+          CS->getOperand(1)->dump();
+          GlobalVariable *AnnotationGL =
+              dyn_cast<GlobalVariable>(CS->getOperand(1));
+          StringRef annotation =
+              dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())
+                  ->getAsCString();
+          if (annotation.compare("shellvm-main") == 0) {
+            func->addFnAttr("shellvm-main");
+            func->setUnnamedAddr(GlobalValue::UnnamedAddr::Local);
+            annotFuncs.insert(func);
           }
-          Fn->addFnAttr(Annotation);
-          FoundAnnotation = true;
-          // Continue searching for duplicate annotations
         }
       }
     }
+  }
 
-    if (!FoundAnnotation) {
-      report_fatal_error("No functions have been annotated with shellvm-main");
+  bool runOnModule(Module &M) override {
+    if (annotFuncs.size() != 1) {
+      report_fatal_error(
+          "There should be only one function marked shellvm-main.");
     }
 
     llvm::internalizeModule(
         M, std::bind(&PreparePass::mustPreserve, this, std::placeholders::_1));
     return true;
   }
-
 }; // end of struct PreparePass
 } // end of anonymous namespace
 

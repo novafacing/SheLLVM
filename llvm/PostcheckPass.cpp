@@ -62,7 +62,8 @@ struct Postcheck : public ModulePass {
     // Check 2: Make sure there are no globals.
     for (GlobalVariable &global : M.getGlobalList()) {
       if (!global.getSection().equals("llvm.metadata")) {
-        report_fatal_error("Module has global variables!");
+        report_fatal_error("Module has global variables in" +
+                           global.getSection());
       }
     }
 
