@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.4)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON) # Must go before project() below
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON) # Must go before project() below
 
+set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(NOT DEFINED CMAKE_C_COMPILER)
   set(CMAKE_C_COMPILER "clang")
 endif()
